@@ -119,6 +119,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+
+AUTH_USER_MODEL = 'account.User'
+
+
 CORS_ALLOW_ALL_ORIGINS = True  # Se permite temporalmente mientras se construye el front
 
 
