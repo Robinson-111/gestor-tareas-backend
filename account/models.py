@@ -27,10 +27,10 @@ class User(AbstractBaseUser):
         regex=r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$',
         message='El nombre solo puede contener letras y espacios.'
     )
-    name = models.CharField(max_length=150, validators=[name_validator])
+    name = models.CharField(max_length=150, null=False, validators=[name_validator])
 
     # email: VARCHAR(150) UNIQUE
-    email = models.EmailField(max_length=150, unique=True)
+    email = models.EmailField(max_length=150, null=False, unique=True)
 
     # password: Ya está incluido por AbstractBaseUser como VARCHAR(128) con hash
     
@@ -42,6 +42,7 @@ class User(AbstractBaseUser):
         
     rol = models.CharField(
         max_length=20,
+        null=False,
         choices=Roles.choices,
         default=Roles.USER
     )
