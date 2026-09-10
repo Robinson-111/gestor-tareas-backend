@@ -54,19 +54,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate_password(self, value):
-       
         if len(value) < 8:
             raise serializers.ValidationError("La contraseña debe tener al menos 8 caracteres.")
         return value
 
     def validate(self, data):
-       
         if data.get('password') != data.get('confirm_password'):
             raise serializers.ValidationError({"confirm_password": "Las contraseñas no coinciden."})
         return data
 
     def create(self, validated_data):
-       
         validated_data.pop('confirm_password', None)
         
         user = User.objects.create_user(
