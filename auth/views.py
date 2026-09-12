@@ -2,8 +2,10 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers.register import RegisterSerializer
 from .serializers.login import LoginSerializer
+from .serializers.logout import LogoutSerializer
 
 class RegisterView(APIView):
     def post(self, request):
@@ -38,3 +40,20 @@ class LoginView(APIView):
                 },
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class LogoutView(APIView):
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                "message": "Sesión cerrada exitosamente."
+            }, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class RefreshTokenView(TokenRefreshView):
+    """
+    Endpoint para renovar el access token (y rotar refresh token si está configurado).
+    """
+    pass
+

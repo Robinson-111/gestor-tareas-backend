@@ -1,5 +1,6 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
+from rest_framework_simplejwt.tokens import RefreshToken
 from account.models import User
 class RegisterTests(APITestCase):
     def setUp(self):
@@ -100,3 +101,78 @@ class LoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("El correo electrónico no puede estar vacío.", response.data["email"])
         self.assertIn("La contraseña no puede estar vacía.", response.data["password"])
+
+
+class LogoutTests(APITestCase):
+    def setUp(self):
+        self.logout_url = "/auth/logout/"
+        self.refresh_url = "/auth/refresh/"
+        self.user = User.objects.create_user(
+            email="logout_user@example.com",
+            name="Logout User",
+            password="Password123*"
+        )
+        self.refresh_token = str(RefreshToken.for_user(self.user))
+
+    def test_logout_success(self):
+        response = self.client.post(self.logout_url, {"refresh": self.refresh_token})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("message"), "Sesión cerrada exitosamente.")
+
+    def test_logout_blacklists_token(self):
+        # Primero cerramos sesión
+        logout_response = self.client.post(self.logout_url, {"refresh": self.refresh_token})
+        self.assertEqual(logout_response.status_code, status.HTTP_200_OK)
+
+        # Intentar refrescar con el token en lista negra debe fallar
+        refresh_response = self.client.post(self.refresh_url, {"refresh": self.refresh_token})
+        self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_already_blacklisted_token(self):
+        # Blacklist primeramente
+        self.client.post(self.logout_url, {"refresh": self.refresh_token})
+        # Intentar hacer logout de nuevo con el mismo token
+        response = self.client.post(self.logout_url, {"refresh": self.refresh_token})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("El token es inválido o ha expirado.", str(response.data))
+
+    def test_logout_invalid_token(self):
+        response = self.client.post(self.logout_url, {"refresh": "token_invalido_123"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("El token es inválido o ha expirado.", str(response.data))
+
+    def test_logout_missing_token(self):
+        response = self.client.post(self.logout_url, {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("El token de actualización (refresh) es obligatorio.", response.data["refresh"])
+
+    def test_logout_blank_token(self):
+        response = self.client.post(self.logout_url, {"refresh": ""})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("El token de actualización no puede estar vacío.", response.data["refresh"])
+
+
+class RefreshTokenTests(APITestCase):
+    def setUp(self):
+        self.refresh_url = "/auth/refresh/"
+        self.user = User.objects.create_user(
+            email="refresh_user@example.com",
+            name="Refresh User",
+            password="Password123*"
+        )
+        self.refresh_token = str(RefreshToken.for_user(self.user))
+
+    def test_refresh_token_success(self):
+        response = self.client.post(self.refresh_url, {"refresh": self.refresh_token})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+    def test_refresh_token_invalid(self):
+        response = self.client.post(self.refresh_url, {"refresh": "token_falso"})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_refresh_token_missing(self):
+        response = self.client.post(self.refresh_url, {})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+

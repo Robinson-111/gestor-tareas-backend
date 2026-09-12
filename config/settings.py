@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
 
     #Apps del proyecto
     'account',
@@ -128,6 +129,13 @@ AUTH_USER_MODEL = 'account.User'
 
 CORS_ALLOW_ALL_ORIGINS = True  # Se permite temporalmente mientras se construye el front
 
+
+# Django REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+}
 
 # Configuracion de Simple_JWT 
 SIMPLE_JWT = {
