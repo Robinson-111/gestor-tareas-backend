@@ -43,6 +43,29 @@ class RegisterTests(APITestCase):
         response = self.client.post(self.register_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_cannot_register_with_admin_role(self):
+        """Intento de registro público como ADMIN debe responder 400 Bad Request"""
+        payload = self.valid_payload.copy()
+        payload["rol"] = "ADMIN"
+        response = self.client.post(self.register_url, payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("rol", response.data)
+
+    def test_cannot_register_with_super_admin_role(self):
+        """Intento de registro público como SUPER_ADMIN debe responder 400 Bad Request"""
+        payload = self.valid_payload.copy()
+        payload["rol"] = "SUPER_ADMIN"
+        response = self.client.post(self.register_url, payload)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("rol", response.data)
+
+    def test_registered_user_has_regular_user_role(self):
+        """Cualquier usuario registrado por este endpoint debe tener rol USER"""
+        response = self.client.post(self.register_url, self.valid_payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_user = User.objects.get(email=self.valid_payload["email"])
+        self.assertEqual(created_user.rol, User.Roles.USER)
+
 
 class LoginTests(APITestCase):
     def setUp(self):

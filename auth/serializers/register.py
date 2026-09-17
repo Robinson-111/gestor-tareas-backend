@@ -59,8 +59,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
+        # 1. Validar que las contraseñas coincidan
         if data.get('password') != data.get('confirm_password'):
             raise serializers.ValidationError({"confirm_password": "Las contraseñas no coinciden."})
+
+        # 2. Impedir creación pública de roles administrativos
+        requested_role = self.initial_data.get('rol')
+        if requested_role and requested_role in [User.Roles.ADMIN, User.Roles.SUPER_ADMIN]:
+            raise serializers.ValidationError({
+                "rol": "No está permitido registrarse con roles administrativos."
+            })
+            
         return data
 
     def create(self, validated_data):
@@ -69,6 +78,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(
             email=validated_data['email'],
             name=validated_data['name'],
-            password=validated_data['password']
+            password=validated_data['password'],
+            rol=User.Roles.USER
         )
         return user
