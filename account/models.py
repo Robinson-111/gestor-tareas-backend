@@ -51,6 +51,23 @@ class User(AbstractBaseUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    #Manejo de los roles que creamos en la clase Roles 
+    @property
+    def is_super_admin(self):
+        return self.rol == self.Roles.SUPER_ADMIN
+
+    @property
+    def is_admin(self):
+        return self.rol == self.Roles.ADMIN
+
+    @property
+    def is_regular_user(self):
+        return self.rol == self.Roles.USER
+
+    @property
+    def is_admin_or_super(self):
+        return self.rol in [self.Roles.ADMIN, self.Roles.SUPER_ADMIN]
+
     objects = UserManager() # Vinculamos el manager
 
     USERNAME_FIELD = 'email'
