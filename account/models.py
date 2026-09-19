@@ -74,7 +74,7 @@ class User(AbstractBaseUser):
     REQUIRED_FIELDS = ['name'] # Requerido al crear superusers por consola
 
     class Meta:
-        db_table = 'User'
+        db_table = 'user'
 
     def __str__(self):
         return self.email
