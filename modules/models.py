@@ -38,3 +38,47 @@ class Module(models.Model):
         return self.name
 
 
+class UserModule(models.Model):
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="user_modules",
+        verbose_name="Usuario"
+    )
+    module = models.ForeignKey(
+        Module,
+        on_delete=models.CASCADE,
+        related_name="user_modules",
+        verbose_name="Módulo"
+    )
+
+    class Roles(models.TextChoices):
+        OWNER = 'OWNER', 'Propietario'
+        MEMBER = 'MEMBER', 'Integrante'
+
+    rol = models.CharField(
+        max_length=20,
+        choices=Roles.choices,
+        default=Roles.MEMBER,
+        null=False
+    )
+
+    class Meta:
+        db_table = 'user_module'
+        verbose_name = 'Usuario por Módulo'
+        verbose_name_plural = 'Usuarios por Módulo'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'module'],
+                name='unique_user_module'
+            ),
+            #validar en BD solo exista un owner por modulo
+            models.UniqueConstraint(
+                fields=['models'],
+                condition=models.Q(rol='OWNER'),
+                name='unique_owner_per_module'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.module.name} ({self.rol})"
