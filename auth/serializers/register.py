@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from account.models import User
+from auth.services import register_user
+
 import re
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -73,5 +75,4 @@ class RegisterSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        from auth.services import register_user
         return register_user(validated_data)
