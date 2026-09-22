@@ -73,12 +73,5 @@ class RegisterSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        validated_data.pop('confirm_password', None)
-        
-        user = User.objects.create_user(
-            email=validated_data['email'],
-            name=validated_data['name'],
-            password=validated_data['password'],
-            rol=User.Roles.USER
-        )
-        return user
+        from auth.services import register_user
+        return register_user(validated_data)

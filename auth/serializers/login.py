@@ -1,6 +1,5 @@
 # auth/serializers/login.py
 from rest_framework import serializers
-from django.contrib.auth import authenticate
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField(
@@ -22,14 +21,3 @@ class LoginSerializer(serializers.Serializer):
         }
     )
 
-    def validate(self, data):
-        email = data.get('email')
-        password = data.get('password')
-
-        user = authenticate(username=email, password=password)
-
-        if not user:
-            raise serializers.ValidationError("Correo o contraseña incorrectos.")
-
-        data['user'] = user  # Guardamos el usuario autenticado
-        return data

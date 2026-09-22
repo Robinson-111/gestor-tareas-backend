@@ -1,17 +1,18 @@
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework import serializers
 from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers.register import RegisterSerializer
 from .serializers.login import LoginSerializer
 from .serializers.logout import LogoutSerializer
+from .services import login_user, blacklist_refresh_token, register_user
 
 class RegisterView(APIView):
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            register_user(serializer.validated_data)
             return Response({
                 "message": "Usuario registrado exitosamente."
             }, status=status.HTTP_201_CREATED)
@@ -20,36 +21,34 @@ class RegisterView(APIView):
 class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.validated_data['user']
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-            refresh = RefreshToken.for_user(user)
-            refresh['name'] = user.name
-            refresh['email'] = user.email
-            refresh['rol'] = user.rol
-
+        try:
+            tokens_data = login_user(
+                email=serializer.validated_data['email'],
+                password=serializer.validated_data['password']
+            )
             return Response({
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
                 "message": "Usuario autenticado exitosamente.",
-                'user' : {
-                    'id': user.id,
-                    'name': user.name,
-                    'email': user.email,
-                    'rol': user.rol,
-                },
+                **tokens_data
             }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(APIView):
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            blacklist_refresh_token(serializer.validated_data['refresh'])
             return Response({
                 "message": "Sesión cerrada exitosamente."
             }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
 class RefreshTokenView(TokenRefreshView):
     """

@@ -74,7 +74,7 @@ class UserModule(models.Model):
             ),
             #validar en BD solo exista un owner por modulo
             models.UniqueConstraint(
-                fields=['models'],
+                fields=['module'],
                 condition=models.Q(rol='OWNER'),
                 name='unique_owner_per_module'
             )
