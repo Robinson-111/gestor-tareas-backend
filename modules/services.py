@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import QuerySet
 from modules.models import Module, UserModule
 from account.models import User
+from django.shortcuts import get_object_or_404
 
 
 def get_modules_list() -> QuerySet[Module]:
@@ -28,3 +29,6 @@ def create_module(creator: User, validated_data: dict) -> Module:
             rol=UserModule.Roles.OWNER
         )
         return module
+
+def get_module(id: int) -> Module:
+    return get_object_or_404(Module.objects.select_related('creator'), id=id)

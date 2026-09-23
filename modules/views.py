@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from .services import get_modules_list, create_module
+from .services import get_modules_list, create_module, get_module
 from .serializers.modules import ModuleSerializer
 
 
@@ -30,3 +30,13 @@ class ModuleListView(APIView):
             "message": "Módulo creado exitosamente.",
             "data": response_serializer.data
         }, status=status.HTTP_201_CREATED)
+
+
+class ModuleDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        module = get_module(id)
+        serializer = ModuleSerializer(module)
+        return Response(serializer.data,status=status.HTTP_200_OK)
+
