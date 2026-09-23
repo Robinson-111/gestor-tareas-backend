@@ -32,3 +32,14 @@ def create_module(creator: User, validated_data: dict) -> Module:
 
 def get_module(id: int) -> Module:
     return get_object_or_404(Module.objects.select_related('creator'), id=id)
+
+
+def edit_module(module: Module, validated_data: dict) -> Module:
+    """
+    Actualiza los campos de un módulo con los datos validados y guarda los cambios.
+    """
+    for field, value in validated_data.items():
+        setattr(module, field, value)
+    module.save()
+    return module
+

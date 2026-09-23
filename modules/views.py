@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from .services import get_modules_list, create_module, get_module
+from .services import get_modules_list, create_module, get_module, edit_module
 from .serializers.modules import ModuleSerializer
 
 
@@ -38,5 +38,23 @@ class ModuleDetailView(APIView):
     def get(self, request, id):
         module = get_module(id)
         serializer = ModuleSerializer(module)
-        return Response(serializer.data,status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def patch(self, request, id):
+        module = get_module(id)
+        serializer = ModuleSerializer(module, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        updated_module = edit_module(
+            module=module,
+            validated_data=serializer.validated_data
+        )
+
+        response_serializer = ModuleSerializer(updated_module)
+        return Response({
+            "message": "Módulo actualizado exitosamente.",
+            "data": response_serializer.data
+        }, status=status.HTTP_200_OK)
+
 
