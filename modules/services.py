@@ -43,3 +43,7 @@ def edit_module(module: Module, validated_data: dict) -> Module:
     module.save()
     return module
 
+def delete_module(id: int):
+    module = get_object_or_404(Module, id=id)
+    return module.delete()
+
