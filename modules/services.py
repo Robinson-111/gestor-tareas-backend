@@ -43,6 +43,7 @@ def create_module(creator: User, validated_data: dict) -> Module:
 
         return module
 
+
 def get_module(id: int) -> Module:
     return get_object_or_404(Module.objects.select_related('creator'), id=id)
 
@@ -56,7 +57,14 @@ def edit_module(module: Module, validated_data: dict) -> Module:
     module.save()
     return module
 
+
 def delete_module(id: int):
     module = get_object_or_404(Module, id=id)
     return module.delete()
+
+
+def get_members_module(module_id: int):
+    return UserModule.objects.filter(module=module_id)
+
+
 

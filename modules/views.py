@@ -4,9 +4,10 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.http import Http404
 
-from .services import get_modules_list, create_module, get_module, edit_module, delete_module
+from .services import get_modules_list, create_module, get_module, edit_module, delete_module, get_members_module
 from .serializers.modules import ModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
+from .serializers.members_module import MemberModuleSerializer
 
 
 class ModuleListView(APIView):
@@ -71,4 +72,17 @@ class ModuleDetailView(APIView):
             return Response({
                 "message" : "El módulo que intentas eliminar no existe"
             }, status=status.HTTP_404_NOT_FOUND)
+
+class MembersModuleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, id):
+        module_id = id
+        members = get_members_module(module_id)
+        serializer = MemberModuleSerializer(members, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+        
+
+
 
