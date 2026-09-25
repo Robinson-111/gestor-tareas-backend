@@ -63,6 +63,13 @@ class UserModule(models.Model):
         null=False
     )
 
+    @property
+    def is_ower(self):
+        return self.rol == self.Roles.OWNER
+    
+    def is_member(self):
+        return self.rol == self.Roles.MEMBER
+
     class Meta:
         db_table = 'user_module'
         verbose_name = 'Usuario por Módulo'

@@ -18,6 +18,8 @@ def create_module(creator: User, validated_data: dict) -> Module:
     Crea un módulo y asigna automáticamente al creador como OWNER en UserModule
     de forma atómica.
     """
+    members = validated_data.pop('members', [])
+
     with transaction.atomic():
         module = Module.objects.create(
             creator=creator,
@@ -28,6 +30,17 @@ def create_module(creator: User, validated_data: dict) -> Module:
             module=module,
             rol=UserModule.Roles.OWNER
         )
+    
+        for user in members:
+            if user == creator:
+                continue
+
+            UserModule.objects.create(
+                user=user,
+                module=module,
+                rol=UserModule.Roles.MEMBER
+            )
+
         return module
 
 def get_module(id: int) -> Module:
