@@ -2,12 +2,23 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
 from django.http import Http404
 
-from .services import get_modules_list, create_module, get_module, edit_module, delete_module, get_members_module
+from .services import (
+    get_modules_list,
+    create_module,
+    get_module,
+    edit_module,
+    delete_module,
+    get_members_module,
+    add_member_to_module,
+    delete_member_from_module,
+)
 from .serializers.modules import ModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
 from .serializers.members_module import MemberModuleSerializer
+from .serializers.add_member import AddMemberModuleSerializer
 
 
 class ModuleListView(APIView):
@@ -77,12 +88,54 @@ class MembersModuleView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, id):
-        module_id = id
-        members = get_members_module(module_id)
-        serializer = MemberModuleSerializer(members, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        try:
+            members = get_members_module(id)
+            serializer = MemberModuleSerializer(members, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Http404:
+            return Response({
+                "message": "El módulo no existe."
+            }, status=status.HTTP_404_NOT_FOUND)
 
-        
+    def post(self, request, id):
+        serializer = AddMemberModuleSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            member = add_member_to_module(
+                module_id=id,
+                user=serializer.validated_data['user'],
+                rol=serializer.validated_data.get('rol')
+            )
+            response_serializer = MemberModuleSerializer(member)
+            return Response({
+                "message": "Integrante agregado exitosamente.",
+                "data": response_serializer.data
+            }, status=status.HTTP_201_CREATED)
+        except Http404:
+            return Response({
+                "message": "El módulo no existe."
+            }, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
+    def delete(self, request, id, user_id=None):
+        if not user_id:
+            return Response({
+                "message": "Debe especificar el user_id del integrante a eliminar."
+            }, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            delete_member_from_module(module_id=id, user_id=user_id)
+            return Response({
+                "message": "Integrante eliminado exitosamente del módulo."
+            }, status=status.HTTP_200_OK)
+        except Http404:
+            return Response({
+                "message": "El integrante no pertenece a este módulo o no existe."
+            }, status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response({
+                "message": e.detail if isinstance(e.detail, str) else e.detail[0] if isinstance(e.detail, list) else str(e.detail)
+            }, status=status.HTTP_400_BAD_REQUEST)

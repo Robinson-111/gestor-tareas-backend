@@ -1,8 +1,10 @@
 from django.db import transaction
 from django.db.models import QuerySet
+from rest_framework.exceptions import ValidationError
+from django.shortcuts import get_object_or_404
+
 from modules.models import Module, UserModule
 from account.models import User
-from django.shortcuts import get_object_or_404
 
 
 def get_modules_list() -> QuerySet[Module]:
@@ -62,9 +64,35 @@ def delete_module(id: int):
     module = get_object_or_404(Module, id=id)
     return module.delete()
 
-
 def get_members_module(module_id: int):
-    return UserModule.objects.filter(module=module_id)
+    get_object_or_404(Module, id=module_id)
+    return UserModule.objects.filter(module=module_id).select_related('user')
 
 
+def add_member_to_module(module_id: int, user: User, rol: str = UserModule.Roles.MEMBER) -> UserModule:
+    """
+    Agrega un nuevo integrante a un módulo.
+    Verifica que el módulo exista y que el usuario no esté asignado ya.
+    """
+    module = get_object_or_404(Module, id=module_id)
 
+    if UserModule.objects.filter(module=module, user=user).exists():
+        raise ValidationError({"user_id": ["El usuario ya es integrante de este módulo."]})
+
+    return UserModule.objects.create(
+        module=module,
+        user=user,
+        rol=rol
+    )
+
+
+def delete_member_from_module(module_id: int, user_id: int):
+    """
+    Elimina a un integrante de un módulo.
+    No permite eliminar al propietario (OWNER) del módulo.
+    """
+    user_module = get_object_or_404(UserModule, module_id=module_id, user_id=user_id)
+    if user_module.rol == UserModule.Roles.OWNER:
+        raise ValidationError("No es posible eliminar al propietario del módulo.")
+    user_module.delete()
+    return user_module
