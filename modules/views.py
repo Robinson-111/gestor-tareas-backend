@@ -14,6 +14,7 @@ from .services import (
     get_members_module,
     add_member_to_module,
     delete_member_from_module,
+    edit_rol_member_from_module
 )
 from .serializers.modules import ModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
@@ -139,3 +140,28 @@ class MembersModuleView(APIView):
             return Response({
                 "message": e.detail if isinstance(e.detail, str) else e.detail[0] if isinstance(e.detail, list) else str(e.detail)
             }, status=status.HTTP_400_BAD_REQUEST)
+            
+    def patch(self, request, id, user_id=None):
+        target_user_id = user_id or request.data.get('user_id')
+        if not target_user_id:
+            return Response({
+                "message": "Debe especificar el user_id del integrante."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            member = edit_rol_member_from_module(
+                module_id=id,
+                user_id=target_user_id,
+                current_user_id=request.user.id
+            )
+            response_serializer = MemberModuleSerializer(member)
+            return Response({
+                "message": "Rol transferido exitosamente.",
+                "data": response_serializer.data
+            }, status=status.HTTP_200_OK)
+        except PermissionError as e:
+            return Response({"message": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as e:
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Http404:
+            return Response({"message": "El módulo no existe."}, status=status.HTTP_404_NOT_FOUND)

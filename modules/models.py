@@ -64,9 +64,10 @@ class UserModule(models.Model):
     )
 
     @property
-    def is_ower(self):
+    def is_owner(self):
         return self.rol == self.Roles.OWNER
     
+    @property
     def is_member(self):
         return self.rol == self.Roles.MEMBER
 

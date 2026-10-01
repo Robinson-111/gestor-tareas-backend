@@ -96,3 +96,53 @@ def delete_member_from_module(module_id: int, user_id: int):
         raise ValidationError("No es posible eliminar al propietario del módulo.")
     user_module.delete()
     return user_module
+
+
+def edit_rol_member_from_module(
+    module_id: int,
+    user_id: int,
+    current_user_id: int
+):
+    """
+    Transfiere el rol de OWNER a otro miembro del módulo.
+
+    Solo el OWNER actual puede realizar la transferencia.
+    """
+
+    current_owner = UserModule.objects.filter(
+        module_id=module_id,
+        user_id=current_user_id
+    ).first()
+
+    if not current_owner:
+        raise ValueError("El usuario no pertenece al módulo.")
+
+    if not current_owner.is_owner:
+        raise PermissionError(
+            "Solo el OWNER puede transferir el rol."
+        )
+
+    member = UserModule.objects.filter(
+        module_id=module_id,
+        user_id=user_id
+    ).first()
+
+    if not member:
+        raise ValueError(
+            "El usuario no pertenece al módulo."
+        )
+
+    if not member.is_member:
+        raise ValueError(
+            "El usuario seleccionado ya es OWNER."
+        )
+
+    with transaction.atomic():
+
+        current_owner.rol = UserModule.Roles.MEMBER
+        current_owner.save(update_fields=['rol'])
+
+        member.rol = UserModule.Roles.OWNER
+        member.save(update_fields=['rol'])
+
+    return member
