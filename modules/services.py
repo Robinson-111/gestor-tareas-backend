@@ -146,3 +146,41 @@ def edit_rol_member_from_module(
         member.save(update_fields=['rol'])
 
     return member
+
+
+def claim_module_ownership(module_id: int, user_id: int) -> UserModule:
+    """
+    Permite a un integrante reclamar el rol de OWNER
+    si el módulo no tiene ningún propietario asignado.
+    """
+    get_object_or_404(Module, id=module_id)
+
+    # Verificar que NO haya owner
+    owner_exists = UserModule.objects.filter(
+        module_id=module_id,
+        rol=UserModule.Roles.OWNER
+    ).exists()
+
+
+    if owner_exists:
+        raise PermissionError("El módulo ya tiene un propietario.")
+
+    
+    #Validamos si el reclamador es integrante del modulo, de lo contrario lo incorparamos
+    member = UserModule.objects.filter(
+        module_id=module_id,
+        user_id=user_id
+    ).first()
+
+    if not member:
+        member = UserModule.objects.create(
+            module_id=module_id,
+            user_id=user_id,
+            rol=UserModule.Roles.OWNER
+        )
+        return member
+
+    member.rol = UserModule.Roles.OWNER
+    member.save(update_fields=['rol'])
+
+    return member

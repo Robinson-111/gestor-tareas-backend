@@ -14,7 +14,8 @@ from .services import (
     get_members_module,
     add_member_to_module,
     delete_member_from_module,
-    edit_rol_member_from_module
+    edit_rol_member_from_module,
+    claim_module_ownership
 )
 from .serializers.modules import ModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
@@ -157,6 +158,28 @@ class MembersModuleView(APIView):
             response_serializer = MemberModuleSerializer(member)
             return Response({
                 "message": "Rol transferido exitosamente.",
+                "data": response_serializer.data
+            }, status=status.HTTP_200_OK)
+        except PermissionError as e:
+            return Response({"message": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as e:
+            return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Http404:
+            return Response({"message": "El módulo no existe."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ClaimModuleOwnershipView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, id):
+        try:
+            member = claim_module_ownership(
+                module_id=id,
+                user_id=request.user.id
+            )
+            response_serializer = MemberModuleSerializer(member)
+            return Response({
+                "message": "Has reclamado el rol de OWNER existosamente.",
                 "data": response_serializer.data
             }, status=status.HTTP_200_OK)
         except PermissionError as e:
