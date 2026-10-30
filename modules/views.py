@@ -17,6 +17,7 @@ from .services import (
     edit_rol_member_from_module,
     claim_module_ownership
 )
+from core.pagination import CustomPagination
 from .serializers.modules import ModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
 from .serializers.members_module import MemberModuleSerializer
@@ -27,9 +28,13 @@ class ModuleListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        modules = get_modules_list()
-        serializer = ModuleSerializer(modules, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        search = request.query_params.get('search')
+        modules = get_modules_list(search=search)
+
+        paginator = CustomPagination()
+        paginated_modules = paginator.paginate_queryset(modules, request)
+        serializer = ModuleSerializer(paginated_modules, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     def post(self, request):
         serializer = ModuleCreateSerializer(data=request.data)

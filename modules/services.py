@@ -1,18 +1,27 @@
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import QuerySet, Q
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 
 from modules.models import Module, UserModule
 from account.models import User
+from tasks.models import Tasks
 
 
-def get_modules_list() -> QuerySet[Module]:
+def get_modules_list(search: str | None = None) -> QuerySet[Module]:
     """
     Retorna todos los módulos del sistema ordenados del más reciente al más antiguo.
-    Cualquier usuario tiene acceso a consultar la lista de módulos.
+    Si se proporciona el parámetro search, filtra por nombre o descripción.
     """
-    return Module.objects.all().select_related('creator').order_by('-created_at')
+    queryset = Module.objects.all().select_related('creator').order_by('-created_at')
+
+    if search:
+        search = search.strip()
+        queryset = queryset.filter(
+            Q(name__icontains=search) | Q(description__icontains=search)
+        )
+
+    return queryset
 
 
 def create_module(creator: User, validated_data: dict) -> Module:
@@ -53,7 +62,22 @@ def get_module(id: int) -> Module:
 def edit_module(module: Module, validated_data: dict) -> Module:
     """
     Actualiza los campos de un módulo con los datos validados y guarda los cambios.
+    Un módulo solo puede pasar a COMPLETADO si tiene al menos una tarea
+    y todas sus tareas están COMPLETADAS.
     """
+    new_state = validated_data.get('state')
+
+    if new_state == Module.ModuleStates.COMPLETADO:
+        if not module.tasks.exists():
+            raise ValidationError({
+                "state": "No se puede pasar el módulo a COMPLETADO porque no tiene ninguna tarea asociada."
+            })
+
+        if module.tasks.exclude(state=Tasks.TaskState.COMPLETADA).exists():
+            raise ValidationError({
+                "state": "No se puede pasar el módulo a COMPLETADO hasta que todas sus tareas estén COMPLETADAS."
+            })
+
     for field, value in validated_data.items():
         setattr(module, field, value)
     module.save()
