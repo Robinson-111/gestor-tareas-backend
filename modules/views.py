@@ -23,6 +23,7 @@ from .services import (
 from core.pagination import CustomPagination
 from .serializers.modules import ModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
+from .serializers.edit_modules import EditModuleSerializer
 from .serializers.members_module import MemberModuleSerializer
 from .serializers.add_member import AddMemberModuleSerializer
 
@@ -86,7 +87,7 @@ class ModuleDetailView(APIView):
 
     def patch(self, request, id):
         module = get_module(id)
-        serializer = ModuleSerializer(module, data=request.data, partial=True)
+        serializer = EditModuleSerializer(module, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

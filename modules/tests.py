@@ -103,6 +103,19 @@ class ModuleUpdateDeleteTests(ModuleEndpointsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['data']['name'], 'Nuevo nombre')
 
+    def test_patch_rejects_unknown_fields(self):
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.patch(
+            self.detail_url(),
+            {'creator': self.outsider.id},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('creator', response.data)
+        self.module.refresh_from_db()
+        self.assertEqual(self.module.creator_id, self.owner.id)
+
     def test_owner_cannot_complete_module_with_pending_tasks(self):
         Tasks.objects.create(module=self.module, title='Pendiente')
         self.client.force_authenticate(user=self.owner)

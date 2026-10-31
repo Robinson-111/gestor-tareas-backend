@@ -1,7 +1,10 @@
+from django.core.cache import cache
 from rest_framework.test import APITestCase
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from account.models import User
+
+
 class RegisterTests(APITestCase):
     def setUp(self):
         self.register_url = "/auth/register/"  # Ajusta según tu url en auth/urls.py
@@ -11,6 +14,7 @@ class RegisterTests(APITestCase):
             "password": "Password123*",
             "confirm_password": "Password123*"
         }
+
     def test_register_success(self):
         response = self.client.post(self.register_url, self.valid_payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -35,7 +39,7 @@ class RegisterTests(APITestCase):
         response = self.client.post(self.register_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Las contraseñas no coinciden.", response.data["confirm_password"])
-        
+
     def test_password_min_length(self):
         payload = self.valid_payload.copy()
         payload["password"] = "12345"
@@ -69,6 +73,7 @@ class RegisterTests(APITestCase):
 
 class LoginTests(APITestCase):
     def setUp(self):
+        cache.clear()  # Evita que el throttle de login afecte entre tests
         self.login_url = "/auth/login/"
         self.email = "test@example.com"
         self.password = "Password123*"
@@ -136,6 +141,13 @@ class LogoutTests(APITestCase):
             password="Password123*"
         )
         self.refresh_token = str(RefreshToken.for_user(self.user))
+        self.client.force_authenticate(user=self.user)
+
+    def test_logout_unauthenticated_fails(self):
+        """Sin access token no se puede cerrar sesión (401 Unauthorized)"""
+        self.client.force_authenticate(user=None)
+        response = self.client.post(self.logout_url, {"refresh": self.refresh_token})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_logout_success(self):
         response = self.client.post(self.logout_url, {"refresh": self.refresh_token})
@@ -199,3 +211,63 @@ class RefreshTokenTests(APITestCase):
         response = self.client.post(self.refresh_url, {})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+
+class AuthSecurityTests(APITestCase):
+    """Pruebas de endurecimiento: privacidad por defecto, contraseñas y throttling."""
+
+    def setUp(self):
+        cache.clear()
+
+    def register(self, password, email='nuevo@example.com', name='Usuario Nuevo'):
+        return self.client.post(
+            '/auth/register/',
+            {
+                'name': name,
+                'email': email,
+                'password': password,
+                'confirm_password': password,
+            }
+        )
+
+    def test_short_password_is_rejected(self):
+        response = self.register('Ab1')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+
+    def test_numeric_password_is_rejected(self):
+        response = self.register('12345678')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+
+    def test_common_password_is_rejected(self):
+        response = self.register('password')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+
+    def test_password_similar_to_name_is_rejected(self):
+        response = self.register('Robinson2026', email='robinson@example.com', name='Robinson')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+
+    def test_strong_password_is_accepted(self):
+        response = self.register('Xk9#mQ2vLp7z', email='fuerte@example.com')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_protected_endpoints_require_authentication(self):
+        for url in ('/modules/', '/users/'):
+            response = self.client.get(url)
+            self.assertEqual(
+                response.status_code,
+                status.HTTP_401_UNAUTHORIZED,
+                msg=f'{url} debería exigir autenticación'
+            )
+
+    def test_login_is_throttled(self):
+        payload = {'email': 'nadie@example.com', 'password': 'Cualquiera123'}
+
+        for _ in range(10):
+            response = self.client.post('/auth/login/', payload)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        response = self.client.post('/auth/login/', payload)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

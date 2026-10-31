@@ -6,17 +6,19 @@ from django.shortcuts import get_object_or_404
 from account.models import User
 from account.serializers.user import UserSerializer
 from account.permissions import IsAdminOrSuperAdmin
+from core.pagination import CustomPagination
 
 
 class UserListView(APIView):
     permission_classes = [IsAuthenticated] # Validar token
 
     def get(self, request):
-        users = User.objects.all()
-        
-        #pasar serializer con many=True
-        serializer = UserSerializer(users, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        users = User.objects.all().order_by('id')
+
+        paginator = CustomPagination()
+        paginated_users = paginator.paginate_queryset(users, request)
+        serializer = UserSerializer(paginated_users, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
 class UserDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]

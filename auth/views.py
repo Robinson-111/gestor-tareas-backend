@@ -2,6 +2,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import serializers
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers.register import RegisterSerializer
 from .serializers.login import LoginSerializer
@@ -9,6 +11,8 @@ from .serializers.logout import LogoutSerializer
 from .services import login_user, blacklist_refresh_token, register_user
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
@@ -19,6 +23,10 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'login'
+
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
@@ -37,6 +45,8 @@ class LoginView(APIView):
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
 
 class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
         if not serializer.is_valid():
@@ -54,5 +64,5 @@ class RefreshTokenView(TokenRefreshView):
     """
     Endpoint para renovar el access token (y rotar refresh token si está configurado).
     """
-    pass
+    permission_classes = [AllowAny]
 

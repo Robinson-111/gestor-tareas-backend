@@ -1,10 +1,8 @@
-from rest_framework import serializers
+from core.serializer import StrictModelSerializer
 from modules.models import Module
 
-class EditModuleSerializer(serializers.ModelSerializer):
+
+class EditModuleSerializer(StrictModelSerializer):
     class Meta:
         model = Module
-        fields = ['id', 'name', 'description', 'state']
-        read_only_fields = [
-            'id'
-        ]
+        fields = ['name', 'description', 'state']

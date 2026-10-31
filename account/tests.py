@@ -36,12 +36,22 @@ class UserEndpointsTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_get_users_authenticated_success(self):
-        """Usuario autenticado puede listar usuarios (200 OK)"""
+        """Usuario autenticado puede listar usuarios (200 OK, paginado)"""
         self.client.force_authenticate(user=self.regular_user)
         url = reverse('users')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 3)
+        self.assertEqual(response.data['total'], 3)
+        self.assertEqual(len(response.data['results']), 3)
+
+    def test_get_users_respects_page_size(self):
+        """El listado de usuarios respeta page_size"""
+        self.client.force_authenticate(user=self.regular_user)
+        url = reverse('users')
+        response = self.client.get(url, {'page_size': 2})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 2)
+        self.assertEqual(response.data['total'], 3)
 
     # ==========================================
     # TESTS: GET /users/<id>/ (UserDetailView)
@@ -150,4 +160,3 @@ class UserEndpointsTests(APITestCase):
         url = reverse('user', kwargs={'id': 99999})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
-
