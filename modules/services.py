@@ -1,25 +1,48 @@
 from django.db import transaction
-from django.db.models import QuerySet, Q
-from rest_framework.exceptions import ValidationError
+from django.db.models import QuerySet
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 from modules.models import Module, UserModule
 from account.models import User
 from tasks.models import Tasks
 
 
-def get_modules_list(search: str | None = None) -> QuerySet[Module]:
+def get_modules_list(user: User, search: str | None = None) -> QuerySet[Module]:
     """
-    Retorna todos los módulos del sistema ordenados del más reciente al más antiguo.
-    Si se proporciona el parámetro search, filtra por nombre o descripción.
+    Retorna únicamente los módulos a los que pertenece el usuario autenticado,
+    ordenados del más reciente al más antiguo.
+    Si se proporciona el parámetro search, filtra por nombre.
     """
-    queryset = Module.objects.all().select_related('creator').order_by('-created_at')
+    queryset = (
+        Module.objects
+        .filter(user_modules__user=user)
+        .select_related('creator')
+        .order_by('-created_at')
+        .distinct()
+    )
 
     if search:
-        search = search.strip()
-        queryset = queryset.filter(
-            Q(name__icontains=search) | Q(description__icontains=search)
-        )
+        queryset = queryset.filter(name__icontains=search.strip())
+
+    return queryset
+
+
+def get_claimable_modules(search: str | None = None) -> QuerySet[Module]:
+    """
+    Retorna los módulos que no tienen OWNER y por lo tanto pueden ser reclamados
+    por cualquier usuario registrado (RF-15).
+    """
+    queryset = (
+        Module.objects
+        .exclude(user_modules__rol=UserModule.Roles.OWNER)
+        .select_related('creator')
+        .order_by('-created_at')
+    )
+
+    if search:
+        queryset = queryset.filter(name__icontains=search.strip())
 
     return queryset
 
@@ -93,10 +116,11 @@ def get_members_module(module_id: int):
     return UserModule.objects.filter(module=module_id).select_related('user')
 
 
-def add_member_to_module(module_id: int, user: User, rol: str = UserModule.Roles.MEMBER) -> UserModule:
+def add_member_to_module(module_id: int, user: User) -> UserModule:
     """
-    Agrega un nuevo integrante a un módulo.
+    Agrega un nuevo integrante (MEMBER) a un módulo.
     Verifica que el módulo exista y que el usuario no esté asignado ya.
+    El rol OWNER solamente se obtiene por transferencia o reclamo.
     """
     module = get_object_or_404(Module, id=module_id)
 
@@ -106,20 +130,56 @@ def add_member_to_module(module_id: int, user: User, rol: str = UserModule.Roles
     return UserModule.objects.create(
         module=module,
         user=user,
-        rol=rol
+        rol=UserModule.Roles.MEMBER
+    )
+
+
+def _unassign_tasks(module_id: int, user_id: int) -> None:
+    """
+    Deja sin responsable las tareas del módulo asignadas al usuario indicado
+    (RF-11 / RN-13).
+    """
+    Tasks.objects.filter(
+        module_id=module_id,
+        assignee_id=user_id
+    ).update(
+        assignee=None,
+        updated_at=timezone.now()
     )
 
 
 def delete_member_from_module(module_id: int, user_id: int):
     """
-    Elimina a un integrante de un módulo.
+    Elimina a un integrante de un módulo y deja sin responsable sus tareas.
     No permite eliminar al propietario (OWNER) del módulo.
     """
     user_module = get_object_or_404(UserModule, module_id=module_id, user_id=user_id)
+
     if user_module.rol == UserModule.Roles.OWNER:
         raise ValidationError("No es posible eliminar al propietario del módulo.")
-    user_module.delete()
+
+    with transaction.atomic():
+        _unassign_tasks(module_id, user_id)
+        user_module.delete()
+
     return user_module
+
+
+def leave_module(module_id: int, user: User) -> None:
+    """
+    Permite a un MEMBER abandonar voluntariamente el módulo (RF-21).
+    El OWNER no puede abandonar sin transferir antes la propiedad (RN-25).
+    """
+    user_module = get_object_or_404(UserModule, module_id=module_id, user=user)
+
+    if user_module.is_owner:
+        raise ValidationError(
+            "El OWNER no puede abandonar el módulo sin transferir primero la propiedad."
+        )
+
+    with transaction.atomic():
+        _unassign_tasks(module_id, user.id)
+        user_module.delete()
 
 
 def edit_rol_member_from_module(

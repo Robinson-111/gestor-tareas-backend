@@ -15,7 +15,7 @@ class AddMemberModuleSerializer(StrictModelSerializer):
         }
     )
     rol = serializers.ChoiceField(
-        choices=UserModule.Roles.choices,
+        choices=[UserModule.Roles.MEMBER],
         default=UserModule.Roles.MEMBER,
         required=False
     )

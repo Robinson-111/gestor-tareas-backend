@@ -5,8 +5,10 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from django.http import Http404
 
+from .permissions import IsModuleMember, IsModuleOwner
 from .services import (
     get_modules_list,
+    get_claimable_modules,
     create_module,
     get_module,
     edit_module,
@@ -15,7 +17,8 @@ from .services import (
     add_member_to_module,
     delete_member_from_module,
     edit_rol_member_from_module,
-    claim_module_ownership
+    claim_module_ownership,
+    leave_module
 )
 from core.pagination import CustomPagination
 from .serializers.modules import ModuleSerializer
@@ -29,7 +32,7 @@ class ModuleListView(APIView):
 
     def get(self, request):
         search = request.query_params.get('search')
-        modules = get_modules_list(search=search)
+        modules = get_modules_list(user=request.user, search=search)
 
         paginator = CustomPagination()
         paginated_modules = paginator.paginate_queryset(modules, request)
@@ -53,8 +56,28 @@ class ModuleListView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
-class ModuleDetailView(APIView):
+class ModuleClaimableListView(APIView):
+    """
+    Módulos sin OWNER que cualquier usuario registrado puede reclamar (RF-15).
+    """
+
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        modules = get_claimable_modules(search=search)
+
+        paginator = CustomPagination()
+        paginated_modules = paginator.paginate_queryset(modules, request)
+        serializer = ModuleSerializer(paginated_modules, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+
+class ModuleDetailView(APIView):
+    def get_permissions(self):
+        if self.request.method in ('PATCH', 'DELETE'):
+            return [IsAuthenticated(), IsModuleOwner()]
+        return [IsAuthenticated(), IsModuleMember()]
 
     def get(self, request, id):
         module = get_module(id)
@@ -67,10 +90,13 @@ class ModuleDetailView(APIView):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        updated_module = edit_module(
-            module=module,
-            validated_data=serializer.validated_data
-        )
+        try:
+            updated_module = edit_module(
+                module=module,
+                validated_data=serializer.validated_data
+            )
+        except ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
 
         response_serializer = ModuleSerializer(updated_module)
         return Response({
@@ -80,19 +106,21 @@ class ModuleDetailView(APIView):
 
     def delete(self, request, id):
         try:
-            module = delete_module(id)
-            # serializer = ModuleSerializer(module)
+            delete_module(id)
             return Response({
                 "message": "Módulo eliminnado exitosamente.",
-                # "data": serializer.data
             }, status=status.HTTP_200_OK)
         except Http404:
             return Response({
                 "message" : "El módulo que intentas eliminar no existe"
             }, status=status.HTTP_404_NOT_FOUND)
 
+
 class MembersModuleView(APIView):
-    permission_classes = [IsAuthenticated]
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [IsAuthenticated(), IsModuleMember()]
+        return [IsAuthenticated(), IsModuleOwner()]
 
     def get(self, request, id):
         try:
@@ -112,8 +140,7 @@ class MembersModuleView(APIView):
         try:
             member = add_member_to_module(
                 module_id=id,
-                user=serializer.validated_data['user'],
-                rol=serializer.validated_data.get('rol')
+                user=serializer.validated_data['user']
             )
             response_serializer = MemberModuleSerializer(member)
             return Response({
@@ -146,7 +173,7 @@ class MembersModuleView(APIView):
             return Response({
                 "message": e.detail if isinstance(e.detail, str) else e.detail[0] if isinstance(e.detail, list) else str(e.detail)
             }, status=status.HTTP_400_BAD_REQUEST)
-            
+
     def patch(self, request, id, user_id=None):
         target_user_id = user_id or request.data.get('user_id')
         if not target_user_id:
@@ -193,3 +220,26 @@ class ClaimModuleOwnershipView(APIView):
             return Response({"message": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Http404:
             return Response({"message": "El módulo no existe."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class LeaveModuleView(APIView):
+    """
+    Permite a un MEMBER abandonar voluntariamente un módulo (RF-21).
+    """
+
+    permission_classes = [IsAuthenticated, IsModuleMember]
+
+    def post(self, request, id):
+        try:
+            leave_module(module_id=id, user=request.user)
+            return Response({
+                "message": "Has abandonado el módulo exitosamente."
+            }, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            return Response({
+                "message": e.detail if isinstance(e.detail, str) else str(e.detail)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Http404:
+            return Response({
+                "message": "El módulo no existe."
+            }, status=status.HTTP_404_NOT_FOUND)

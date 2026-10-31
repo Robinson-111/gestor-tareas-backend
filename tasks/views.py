@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.pagination import CustomPagination
-from tasks.permissions import IsModuleMember
+from modules.permissions import IsModuleMember
 from tasks.serializers.task import (
     TaskCreateSerializer,
     TaskSerializer,
