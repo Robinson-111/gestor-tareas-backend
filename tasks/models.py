@@ -14,7 +14,8 @@ class Tasks(models.Model):
 
     priority = models.CharField(
         max_length=20,
-        choices=TaskPriority.choices 
+        choices=TaskPriority.choices,
+        default=TaskPriority.MEDIA
     )
 
     class TaskState(models.TextChoices):
