@@ -25,7 +25,7 @@ class RegisterTests(APITestCase):
         payload["email"] = "invalido"
         response = self.client.post(self.register_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Por favor, ingrese un correo electrónico valido", response.data["email"])
+        self.assertIn("Por favor, ingrese un correo electrónico valido", response.data["errors"]["email"])
 
     def test_duplicate_email(self):
         User.objects.create_user(email="test@example.com", name="Existing", password="Password123*")
@@ -38,7 +38,7 @@ class RegisterTests(APITestCase):
         payload["confirm_password"] = "OtraPassword123*"
         response = self.client.post(self.register_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Las contraseñas no coinciden.", response.data["confirm_password"])
+        self.assertIn("Las contraseñas no coinciden.", response.data["errors"]["confirm_password"])
 
     def test_password_min_length(self):
         payload = self.valid_payload.copy()
@@ -53,7 +53,7 @@ class RegisterTests(APITestCase):
         payload["rol"] = "ADMIN"
         response = self.client.post(self.register_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("rol", response.data)
+        self.assertIn("rol", response.data["errors"])
 
     def test_cannot_register_with_super_admin_role(self):
         """Intento de registro público como SUPER_ADMIN debe responder 400 Bad Request"""
@@ -61,7 +61,7 @@ class RegisterTests(APITestCase):
         payload["rol"] = "SUPER_ADMIN"
         response = self.client.post(self.register_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("rol", response.data)
+        self.assertIn("rol", response.data["errors"])
 
     def test_registered_user_has_regular_user_role(self):
         """Cualquier usuario registrado por este endpoint debe tener rol USER"""
@@ -118,7 +118,7 @@ class LoginTests(APITestCase):
         }
         response = self.client.post(self.login_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Por favor, ingrese un correo electrónico válido.", response.data["email"])
+        self.assertIn("Por favor, ingrese un correo electrónico válido.", response.data["errors"]["email"])
 
     def test_login_blank_fields(self):
         payload = {
@@ -127,8 +127,8 @@ class LoginTests(APITestCase):
         }
         response = self.client.post(self.login_url, payload)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("El correo electrónico no puede estar vacío.", response.data["email"])
-        self.assertIn("La contraseña no puede estar vacía.", response.data["password"])
+        self.assertIn("El correo electrónico no puede estar vacío.", response.data["errors"]["email"])
+        self.assertIn("La contraseña no puede estar vacía.", response.data["errors"]["password"])
 
 
 class LogoutTests(APITestCase):
@@ -179,12 +179,12 @@ class LogoutTests(APITestCase):
     def test_logout_missing_token(self):
         response = self.client.post(self.logout_url, {})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("El token de actualización (refresh) es obligatorio.", response.data["refresh"])
+        self.assertIn("El token de actualización (refresh) es obligatorio.", response.data["errors"]["refresh"])
 
     def test_logout_blank_token(self):
         response = self.client.post(self.logout_url, {"refresh": ""})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("El token de actualización no puede estar vacío.", response.data["refresh"])
+        self.assertIn("El token de actualización no puede estar vacío.", response.data["errors"]["refresh"])
 
 
 class RefreshTokenTests(APITestCase):
@@ -232,22 +232,22 @@ class AuthSecurityTests(APITestCase):
     def test_short_password_is_rejected(self):
         response = self.register('Ab1')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
+        self.assertIn('password', response.data["errors"])
 
     def test_numeric_password_is_rejected(self):
         response = self.register('12345678')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
+        self.assertIn('password', response.data["errors"])
 
     def test_common_password_is_rejected(self):
         response = self.register('password')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
+        self.assertIn('password', response.data["errors"])
 
     def test_password_similar_to_name_is_rejected(self):
         response = self.register('Robinson2026', email='robinson@example.com', name='Robinson')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('password', response.data)
+        self.assertIn('password', response.data["errors"])
 
     def test_strong_password_is_accepted(self):
         response = self.register('Xk9#mQ2vLp7z', email='fuerte@example.com')

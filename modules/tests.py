@@ -112,7 +112,7 @@ class ModuleUpdateDeleteTests(ModuleEndpointsTestBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('creator', response.data)
+        self.assertIn('creator', response.data["errors"])
         self.module.refresh_from_db()
         self.assertEqual(self.module.creator_id, self.owner.id)
 
@@ -226,7 +226,7 @@ class ModuleMembersTests(ModuleEndpointsTestBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('rol', response.data)
+        self.assertIn('rol', response.data["errors"])
         self.assertFalse(
             UserModule.objects.filter(module=self.module, user=self.outsider).exists()
         )

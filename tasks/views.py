@@ -1,6 +1,6 @@
 from django.http import Http404
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -32,8 +32,8 @@ class TaskListCreateView(APIView):
                 state=request.query_params.get('estado'),
                 search=request.query_params.get('search')
             )
-        except ValidationError as e:
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            raise PermissionDenied(str(e))
 
         paginator = CustomPagination()
         paginated_tasks = paginator.paginate_queryset(tasks, request)
@@ -42,8 +42,7 @@ class TaskListCreateView(APIView):
 
     def post(self, request, id):
         serializer = TaskCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         try:
             task = create_task(
@@ -51,10 +50,8 @@ class TaskListCreateView(APIView):
                 user=request.user,
                 validated_data=serializer.validated_data
             )
-        except ValidationError as e:
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
         except PermissionError as e:
-            return Response({"message": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDenied(str(e))
 
         response_serializer = TaskSerializer(task)
         return Response({
@@ -70,19 +67,16 @@ class TaskDetailView(APIView):
         try:
             task = get_task(module_id=id, task_id=task_id, user=request.user)
         except PermissionError as e:
-            return Response({"message": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDenied(str(e))
         except Http404:
-            return Response({
-                "message": "La tarea no existe en este módulo."
-            }, status=status.HTTP_404_NOT_FOUND)
+            raise NotFound("La tarea no existe en este módulo.")
 
         serializer = TaskSerializer(task)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def patch(self, request, id, task_id):
         serializer = TaskUpdateSerializer(data=request.data, partial=True)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
 
         try:
             task = update_task(
@@ -92,13 +86,9 @@ class TaskDetailView(APIView):
                 validated_data=serializer.validated_data
             )
         except PermissionError as e:
-            return Response({"message": str(e)}, status=status.HTTP_403_FORBIDDEN)
-        except ValidationError as e:
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+            raise PermissionDenied(str(e))
         except Http404:
-            return Response({
-                "message": "La tarea no existe en este módulo."
-            }, status=status.HTTP_404_NOT_FOUND)
+            raise NotFound("La tarea no existe en este módulo.")
 
         response_serializer = TaskSerializer(task)
         return Response({
@@ -114,11 +104,9 @@ class TaskDetailView(APIView):
                 user=request.user
             )
         except PermissionError as e:
-            return Response({"message": str(e)}, status=status.HTTP_403_FORBIDDEN)
+            raise PermissionDenied(str(e))
         except Http404:
-            return Response({
-                "message": "La tarea no existe en este módulo."
-            }, status=status.HTTP_404_NOT_FOUND)
+            raise NotFound("La tarea no existe en este módulo.")
 
         return Response({
             "message": "Tarea eliminada exitosamente."

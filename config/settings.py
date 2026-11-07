@@ -149,6 +149,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'login': env('LOGIN_THROTTLE_RATE', default='10/min'),
     },
+    # Cuerpo de error único: {"message": ..., "errors": {...}, "code": ...}
+    'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',
 }
 
 # Configuracion de Simple_JWT 

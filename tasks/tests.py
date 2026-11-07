@@ -87,7 +87,7 @@ class TaskListCreateTests(TaskEndpointsTestBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('assignee_id', response.data)
+        self.assertIn('assignee_id', response.data["errors"])
 
     def test_rejects_unknown_fields_on_create(self):
         self.client.force_authenticate(user=self.member)
@@ -98,7 +98,7 @@ class TaskListCreateTests(TaskEndpointsTestBase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('module_id', response.data)
+        self.assertIn('module_id', response.data["errors"])
 
     def test_list_filters_by_state_and_search(self):
         Tasks.objects.create(module=self.module, title='Implementar JWT')

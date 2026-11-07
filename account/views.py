@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from account.models import User
@@ -35,9 +36,8 @@ class UserDetailView(APIView):
 
         #Un Admin no puede eliminar otro admin y menos un SuperAdmin
         if current_user.is_admin and user_to_delete.is_admin_or_super:
-            return Response(
-                {"error": "No tienes permisos para eliminar a este nivel de usuario"},
-                status=status.HTTP_403_FORBIDDEN
+            raise PermissionDenied(
+                "No tienes permisos para eliminar a este nivel de usuario"
             )
 
         #No permitir eliminar el  SuperAdmin
@@ -45,14 +45,12 @@ class UserDetailView(APIView):
             total_super_admin = User.objects.filter(rol= User.Roles.SUPER_ADMIN).count()
 
             if total_super_admin <= 1:
-                return Response(
-                    {"error" : "No se puede eliminar el único Super Admin del sistema"},
-                    status=status.HTTP_400_BAD_REQUEST
+                raise ValidationError(
+                    "No se puede eliminar el único Super Admin del sistema"
                 )
 
         user_to_delete.delete()
 
-        serializer = UserSerializer(user_to_delete)
         return Response(
             {"message": "Usuario eliminado exitosamente"},
             status=status.HTTP_200_OK

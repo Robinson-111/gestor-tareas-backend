@@ -117,7 +117,7 @@ class UserEndpointsTests(APITestCase):
         url = reverse('user', kwargs={'id': self.super_admin.id})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("No tienes permisos", response.data["error"])
+        self.assertIn("No tienes permisos", response.data["message"])
 
     def test_admin_cannot_delete_another_admin(self):
         """Un ADMIN no puede eliminar a otro ADMIN (403 Forbidden)"""
@@ -128,7 +128,7 @@ class UserEndpointsTests(APITestCase):
         url = reverse('user', kwargs={'id': other_admin.id})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("No tienes permisos", response.data["error"])
+        self.assertIn("No tienes permisos", response.data["message"])
 
     def test_admin_can_delete_regular_user(self):
         """Un ADMIN puede eliminar a un usuario regular exitosamente (200 OK)"""
@@ -144,7 +144,7 @@ class UserEndpointsTests(APITestCase):
         url = reverse('user', kwargs={'id': self.super_admin.id})
         response = self.client.delete(url)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("No se puede eliminar el único Super Admin", response.data["error"])
+        self.assertIn("No se puede eliminar el único Super Admin", response.data["message"])
 
     def test_super_admin_can_delete_user(self):
         """Un SUPER_ADMIN puede eliminar usuarios exitosamente (200 OK)"""
