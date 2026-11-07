@@ -6,12 +6,12 @@ Aplica a la sección 18 de los requerimientos (JWT, cookies HttpOnly, sesiones s
 ## 1. Estado actual
 
 - Autenticación por **JWT en el header** `Authorization: Bearer <access>`.
-- `access` (15 min) y `refresh` (7 días) se devuelven en el **body JSON** de `/auth/login/`.
+- `access` (15 min) y `refresh` (7 días) se devuelven en el **body JSON** de `/api/v1/auth/login/`.
 - `SessionAuthentication` **no** está habilitada: DRF no valida CSRF.
 - Como consecuencia, **hoy no hay exposición a CSRF**, porque el navegador no envía
   credenciales automáticamente al API.
 - `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`: todo endpoint es privado salvo
-  `/auth/register/`, `/auth/login/`, `/auth/logout/` y `/auth/refresh/`.
+  `/api/v1/auth/register/`, `/api/v1/auth/login/`, `/api/v1/auth/logout/` y `/api/v1/auth/refresh/`.
 - CORS restringido a los orígenes declarados en `CORS_ALLOWED_ORIGINS`.
 - Endurecimiento de producción (HTTPS, HSTS, cookies seguras) se activa con `DEBUG=False`.
 
@@ -30,7 +30,7 @@ Aplica a la sección 18 de los requerimientos (JWT, cookies HttpOnly, sesiones s
 ### 3.1 Cookies
 
 - `access_token`: `HttpOnly`, `Secure` (prod), `SameSite=Lax`, `Path=/`.
-- `refresh_token`: `HttpOnly`, `Secure` (prod), `SameSite=Strict`, `Path=/auth/refresh/`.
+- `refresh_token`: `HttpOnly`, `Secure` (prod), `SameSite=Strict`, `Path=/api/v1/auth/refresh/`.
 - `logout` debe limpiar ambas cookies con `delete_cookie` (mismo `path` y `domain`).
 - No usar `Domain` amplio: dejar la cookie limitada al host del API.
 
@@ -41,7 +41,7 @@ un riesgo real**. Se propone doble protección:
 
 1. `SameSite=Lax` en `access_token` y `Strict` en `refresh_token`.
 2. Token CSRF de doble envío:
-   - El API expone `GET /auth/csrf/` que devuelve un token en una cookie **no HttpOnly**
+   - El API expone `GET /api/v1/auth/csrf/` que devuelve un token en una cookie **no HttpOnly**
      (`csrftoken`) o en el body.
    - El front lo envía en el header `X-CSRFToken` en cada `POST/PATCH/DELETE`.
    - El API valida con `django.middleware.csrf` (`@csrf_protect` o `SessionAuthentication`
@@ -59,10 +59,10 @@ CORS_ALLOW_CREDENTIALS = env.bool('CORS_ALLOW_CREDENTIALS', default=False)
 
 ### 3.3 Flujo
 
-1. `POST /auth/login/` valida credenciales y responde `Set-Cookie` con ambos tokens.
-2. `POST /auth/refresh/` lee `refresh_token` de la cookie, rota el token (ya configurado
+1. `POST /api/v1/auth/login/` valida credenciales y responde `Set-Cookie` con ambos tokens.
+2. `POST /api/v1/auth/refresh/` lee `refresh_token` de la cookie, rota el token (ya configurado
    `ROTATE_REFRESH_TOKENS`) y emite nuevas cookies.
-3. `POST /auth/logout/` lee la cookie de refresh, la blacklistea y elimina las cookies.
+3. `POST /api/v1/auth/logout/` lee la cookie de refresh, la blacklistea y elimina las cookies.
 4. El front **no** guarda tokens en `localStorage` ni los lee por JS (HttpOnly).
 
 ### 3.4 Notas

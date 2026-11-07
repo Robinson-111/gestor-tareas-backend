@@ -7,7 +7,7 @@ from account.models import User
 
 class RegisterTests(APITestCase):
     def setUp(self):
-        self.register_url = "/auth/register/"  # Ajusta según tu url en auth/urls.py
+        self.register_url = "/api/v1/auth/register/"  # Ajusta según tu url en auth/urls.py
         self.valid_payload = {
             "name": "Test User",
             "email": "test@example.com",
@@ -74,7 +74,7 @@ class RegisterTests(APITestCase):
 class LoginTests(APITestCase):
     def setUp(self):
         cache.clear()  # Evita que el throttle de login afecte entre tests
-        self.login_url = "/auth/login/"
+        self.login_url = "/api/v1/auth/login/"
         self.email = "test@example.com"
         self.password = "Password123*"
         # Creamos un usuario de prueba para autenticarnos
@@ -133,8 +133,8 @@ class LoginTests(APITestCase):
 
 class LogoutTests(APITestCase):
     def setUp(self):
-        self.logout_url = "/auth/logout/"
-        self.refresh_url = "/auth/refresh/"
+        self.logout_url = "/api/v1/auth/logout/"
+        self.refresh_url = "/api/v1/auth/refresh/"
         self.user = User.objects.create_user(
             email="logout_user@example.com",
             name="Logout User",
@@ -189,7 +189,7 @@ class LogoutTests(APITestCase):
 
 class RefreshTokenTests(APITestCase):
     def setUp(self):
-        self.refresh_url = "/auth/refresh/"
+        self.refresh_url = "/api/v1/auth/refresh/"
         self.user = User.objects.create_user(
             email="refresh_user@example.com",
             name="Refresh User",
@@ -220,7 +220,7 @@ class AuthSecurityTests(APITestCase):
 
     def register(self, password, email='nuevo@example.com', name='Usuario Nuevo'):
         return self.client.post(
-            '/auth/register/',
+            '/api/v1/auth/register/',
             {
                 'name': name,
                 'email': email,
@@ -254,7 +254,7 @@ class AuthSecurityTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_protected_endpoints_require_authentication(self):
-        for url in ('/modules/', '/users/'):
+        for url in ('/api/v1/modules/', '/api/v1/users/'):
             response = self.client.get(url)
             self.assertEqual(
                 response.status_code,
@@ -266,8 +266,8 @@ class AuthSecurityTests(APITestCase):
         payload = {'email': 'nadie@example.com', 'password': 'Cualquiera123'}
 
         for _ in range(10):
-            response = self.client.post('/auth/login/', payload)
+            response = self.client.post('/api/v1/auth/login/', payload)
             self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-        response = self.client.post('/auth/login/', payload)
+        response = self.client.post('/api/v1/auth/login/', payload)
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
