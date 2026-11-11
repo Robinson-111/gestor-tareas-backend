@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
+from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from account.models import User
 from account.serializers.user import UserSerializer
@@ -14,7 +15,14 @@ class UserListView(APIView):
     permission_classes = [IsAuthenticated] # Validar token
 
     def get(self, request):
-        users = User.objects.all().order_by('id')
+        users = (
+            User.objects.all()
+            .annotate(
+                modules_count=Count('user_modules', distinct=True),
+                tasks_count=Count('tasks', distinct=True),
+            )
+            .order_by('id')
+        )
 
         paginator = CustomPagination()
         paginated_users = paginator.paginate_queryset(users, request)

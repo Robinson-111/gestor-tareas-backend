@@ -196,6 +196,124 @@ class ModuleListingTests(ModuleEndpointsTestBase):
         response = self.client.get(reverse('modules_claimable'))
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_explore_lists_only_modules_without_membership(self):
+        other_module = Module.objects.create(name='Ajeno', creator=self.outsider)
+        UserModule.objects.create(
+            module=other_module, user=self.outsider, rol=UserModule.Roles.OWNER
+        )
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.get(reverse('modules_explore'))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [module['id'] for module in response.data['results']]
+        self.assertIn(other_module.id, ids)
+        self.assertNotIn(self.module.id, ids)
+
+    def test_explore_marks_ownerless_modules(self):
+        ownerless = Module.objects.create(name='Sin dueño', creator=self.owner)
+
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.get(reverse('modules_explore'))
+
+        modules = {module['id']: module for module in response.data['results']}
+        self.assertTrue(modules[self.module.id]['has_owner'])
+        self.assertEqual(modules[self.module.id]['owner_name'], self.owner.name)
+        self.assertFalse(modules[ownerless.id]['has_owner'])
+        self.assertIsNone(modules[ownerless.id]['owner_name'])
+
+    def test_explore_includes_task_progress(self):
+        Tasks.objects.create(
+            module=self.module,
+            title='Pendiente',
+            state=Tasks.TaskState.PENDIENTE
+        )
+        Tasks.objects.create(
+            module=self.module,
+            title='En curso',
+            state=Tasks.TaskState.EN_CURSO
+        )
+        Tasks.objects.create(
+            module=self.module,
+            title='Completada 1',
+            state=Tasks.TaskState.COMPLETADA
+        )
+        Tasks.objects.create(
+            module=self.module,
+            title='Completada 2',
+            state=Tasks.TaskState.COMPLETADA
+        )
+
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.get(reverse('modules_explore'))
+
+        module = next(
+            item for item in response.data['results']
+            if item['id'] == self.module.id
+        )
+        self.assertEqual(module['total_tasks'], 4)
+        self.assertEqual(module['pending_tasks'], 1)
+        self.assertEqual(module['in_progress_tasks'], 1)
+        self.assertEqual(module['completed_tasks'], 2)
+
+    def test_explore_requires_authentication(self):
+        response = self.client.get(reverse('modules_explore'))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class JoinModuleTests(ModuleEndpointsTestBase):
+    def test_outsider_can_join_module_as_member(self):
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.post(
+            reverse('module_join', kwargs={'id': self.module.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['data']['rol'], UserModule.Roles.MEMBER)
+        membership = UserModule.objects.get(
+            module=self.module, user=self.outsider
+        )
+        self.assertEqual(membership.rol, UserModule.Roles.MEMBER)
+
+    def test_member_cannot_join_twice(self):
+        self.client.force_authenticate(user=self.member)
+        response = self.client.post(
+            reverse('module_join', kwargs={'id': self.module.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            UserModule.objects.filter(
+                module=self.module, user=self.member
+            ).count(),
+            1
+        )
+
+    def test_cannot_join_non_existent_module(self):
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.post(
+            reverse('module_join', kwargs={'id': 9999})
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_join_requires_authentication(self):
+        response = self.client.post(
+            reverse('module_join', kwargs={'id': self.module.id})
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_join_ownerless_module_does_not_claim_ownership(self):
+        ownerless = Module.objects.create(name='Sin dueño', creator=self.owner)
+
+        self.client.force_authenticate(user=self.outsider)
+        response = self.client.post(
+            reverse('module_join', kwargs={'id': ownerless.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        membership = UserModule.objects.get(module=ownerless, user=self.outsider)
+        self.assertEqual(membership.rol, UserModule.Roles.MEMBER)
+
 
 class ModuleMembersTests(ModuleEndpointsTestBase):
     def test_member_cannot_add_member(self):

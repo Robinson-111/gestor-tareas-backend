@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import QuerySet
+from django.db.models import Count, Exists, OuterRef, Q, QuerySet, Subquery
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -21,6 +21,57 @@ def get_modules_list(user: User, search: str | None = None) -> QuerySet[Module]:
         .select_related('creator')
         .order_by('-created_at')
         .distinct()
+    )
+
+    if search:
+        queryset = queryset.filter(name__icontains=search.strip())
+
+    return queryset
+
+
+def get_explore_modules(user: User, search: str | None = None) -> QuerySet[Module]:
+    """
+    Retorna los módulos en los que el usuario NO es integrante, es decir, los
+    que puede explorar para unirse como MEMBER.
+
+    Cada módulo se anota con `has_owner` para que el cliente sepa si también
+    puede reclamar la propiedad.
+    """
+    owner_memberships = UserModule.objects.filter(
+        module=OuterRef('pk'),
+        rol=UserModule.Roles.OWNER
+    )
+    owner_name = (
+        UserModule.objects
+        .filter(module=OuterRef('pk'), rol=UserModule.Roles.OWNER)
+        .values('user__name')[:1]
+    )
+
+    queryset = (
+        Module.objects
+        .exclude(user_modules__user=user)
+        .annotate(
+            has_owner=Exists(owner_memberships),
+            owner_name=Subquery(owner_name),
+            total_tasks=Count('tasks', distinct=True),
+            pending_tasks=Count(
+                'tasks',
+                filter=Q(tasks__state=Tasks.TaskState.PENDIENTE),
+                distinct=True
+            ),
+            in_progress_tasks=Count(
+                'tasks',
+                filter=Q(tasks__state=Tasks.TaskState.EN_CURSO),
+                distinct=True
+            ),
+            completed_tasks=Count(
+                'tasks',
+                filter=Q(tasks__state=Tasks.TaskState.COMPLETADA),
+                distinct=True
+            )
+        )
+        .select_related('creator')
+        .order_by('-created_at')
     )
 
     if search:
@@ -114,6 +165,23 @@ def delete_module(id: int):
 def get_members_module(module_id: int):
     get_object_or_404(Module, id=module_id)
     return UserModule.objects.filter(module=module_id).select_related('user')
+
+
+def join_module(module_id: int, user: User) -> UserModule:
+    """
+    Permite a un usuario autenticado unirse por su cuenta a un módulo como
+    MEMBER. No permite duplicar la pertenencia ni otorgar el rol OWNER.
+    """
+    module = get_object_or_404(Module, id=module_id)
+
+    if UserModule.objects.filter(module=module, user=user).exists():
+        raise ValidationError("Ya eres integrante de este módulo.")
+
+    return UserModule.objects.create(
+        module=module,
+        user=user,
+        rol=UserModule.Roles.MEMBER
+    )
 
 
 def add_member_to_module(module_id: int, user: User) -> UserModule:

@@ -8,7 +8,9 @@ from django.http import Http404
 from .permissions import IsModuleMember, IsModuleOwner
 from .services import (
     get_modules_list,
+    get_explore_modules,
     get_claimable_modules,
+    join_module,
     create_module,
     get_module,
     edit_module,
@@ -22,6 +24,7 @@ from .services import (
 )
 from core.pagination import CustomPagination
 from .serializers.modules import ModuleSerializer
+from .serializers.explore_module import ExploreModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
 from .serializers.edit_modules import EditModuleSerializer
 from .serializers.members_module import MemberModuleSerializer
@@ -52,6 +55,45 @@ class ModuleListView(APIView):
         response_serializer = ModuleSerializer(module)
         return Response({
             "message": "Módulo creado exitosamente.",
+            "data": response_serializer.data
+        }, status=status.HTTP_201_CREATED)
+
+
+class ModuleExploreListView(APIView):
+    """
+    Módulos en los que el usuario no participa, para poder unirse como MEMBER.
+    Incluye `has_owner` para distinguir los que también se pueden reclamar.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search = request.query_params.get('search')
+        modules = get_explore_modules(user=request.user, search=search)
+
+        paginator = CustomPagination()
+        paginated_modules = paginator.paginate_queryset(modules, request)
+        serializer = ExploreModuleSerializer(paginated_modules, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+
+class ModuleJoinView(APIView):
+    """
+    Permite que un usuario autenticado se una por su cuenta a un módulo como
+    MEMBER.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, id):
+        try:
+            member = join_module(module_id=id, user=request.user)
+        except Http404:
+            raise NotFound("El módulo no existe.")
+
+        response_serializer = MemberModuleSerializer(member)
+        return Response({
+            "message": "Te has unido al módulo exitosamente.",
             "data": response_serializer.data
         }, status=status.HTTP_201_CREATED)
 
