@@ -11,7 +11,8 @@ Aplica a la sección 18 de los requerimientos (JWT, cookies HttpOnly, sesiones s
 - Como consecuencia, **hoy no hay exposición a CSRF**, porque el navegador no envía
   credenciales automáticamente al API.
 - `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`: todo endpoint es privado salvo
-  `/api/v1/auth/register/`, `/api/v1/auth/login/`, `/api/v1/auth/logout/` y `/api/v1/auth/refresh/`.
+  `/api/v1/auth/register/`, `/api/v1/auth/login/`, `/api/v1/auth/password-reset/`,
+  `/api/v1/auth/password-reset/confirm/`, `/api/v1/auth/logout/` y `/api/v1/auth/refresh/`.
 - CORS restringido a los orígenes declarados en `CORS_ALLOWED_ORIGINS`.
 - Endurecimiento de producción (HTTPS, HSTS, cookies seguras) se activa con `DEBUG=False`.
 

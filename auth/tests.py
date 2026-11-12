@@ -1,7 +1,12 @@
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
 from django.core.cache import cache
+from django.test import override_settings
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from rest_framework.test import APITestCase
 from rest_framework import status
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, TokenError
 from account.models import User
 
 
@@ -271,3 +276,200 @@ class AuthSecurityTests(APITestCase):
 
         response = self.client.post('/api/v1/auth/login/', payload)
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+@override_settings(MAILERS={'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}})
+class PasswordResetTests(APITestCase):
+    """Recuperación de contraseña: solicitud por correo y confirmación con token."""
+
+    request_url = '/api/v1/auth/password-reset/'
+    confirm_url = '/api/v1/auth/password-reset/confirm/'
+
+    def setUp(self):
+        cache.clear()
+
+    def make_user(self, email='reset@example.com', password='Password123*', name='Ana Torres'):
+        return User.objects.create_user(email=email, name=name, password=password)
+
+    @staticmethod
+    def build_link(user):
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        return uidb64, token
+
+    # ------------------------------------------------------------------
+    # Solicitud del enlace
+    # ------------------------------------------------------------------
+
+    def test_request_sends_email_to_existing_user(self):
+        user = self.make_user()
+
+        response = self.client.post(self.request_url, {'email': 'RESET@example.com'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [user.email])
+        body = mail.outbox[0].body
+        self.assertIn('/reset-password?uidb64=', body)
+        self.assertIn('token=', body)
+
+    def test_request_unknown_email_is_generic_and_silent(self):
+        response = self.client.post(self.request_url, {'email': 'nadie@example.com'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_request_response_does_not_reveal_account(self):
+        self.make_user()
+
+        existing = self.client.post(self.request_url, {'email': 'reset@example.com'})
+        unknown = self.client.post(self.request_url, {'email': 'nadie@example.com'})
+
+        self.assertEqual(existing.data['message'], unknown.data['message'])
+
+    def test_request_inactive_user_gets_no_email(self):
+        user = self.make_user(email='inactivo@example.com')
+        user.is_active = False
+        user.save()
+
+        response = self.client.post(self.request_url, {'email': 'inactivo@example.com'})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_request_missing_email_is_rejected(self):
+        response = self.client.post(self.request_url, {})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data['errors'])
+
+    def test_request_invalid_email_is_rejected(self):
+        response = self.client.post(self.request_url, {'email': 'no-es-correo'})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data['errors'])
+
+    # ------------------------------------------------------------------
+    # Confirmación del restablecimiento
+    # ------------------------------------------------------------------
+
+    def test_confirm_with_valid_token_changes_password(self):
+        user = self.make_user()
+        uidb64, token = self.build_link(user)
+
+        response = self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': token,
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'NewPassword123*',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('NewPassword123*'))
+
+    def test_confirm_allows_login_with_new_password(self):
+        user = self.make_user()
+        uidb64, token = self.build_link(user)
+        self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': token,
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'NewPassword123*',
+        })
+
+        response = self.client.post('/api/v1/auth/login/', {
+            'email': user.email,
+            'password': 'NewPassword123*',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_confirm_blacklists_existing_refresh_tokens(self):
+        user = self.make_user()
+        old_refresh_str = str(RefreshToken.for_user(user))
+        uidb64, token = self.build_link(user)
+
+        response = self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': token,
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'NewPassword123*',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with self.assertRaises(TokenError):
+            RefreshToken(old_refresh_str).check_blacklist()
+
+    def test_confirm_invalid_token_is_rejected(self):
+        user = self.make_user()
+        uidb64, _ = self.build_link(user)
+
+        response = self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': 'token-falso',
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'NewPassword123*',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('Password123*'))
+
+    def test_confirm_invalid_uid_is_rejected(self):
+        response = self.client.post(self.confirm_url, {
+            'uidb64': 'zzzz',
+            'token': 'cualquiera',
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'NewPassword123*',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_confirm_password_mismatch_is_rejected(self):
+        user = self.make_user()
+        uidb64, token = self.build_link(user)
+
+        response = self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': token,
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'Otra45678*',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('confirm_password', response.data['errors'])
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('Password123*'))
+
+    def test_confirm_weak_password_is_rejected(self):
+        user = self.make_user()
+        uidb64, token = self.build_link(user)
+
+        response = self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': token,
+            'new_password': '12345678',
+            'confirm_password': '12345678',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_password', response.data['errors'])
+        user.refresh_from_db()
+        self.assertTrue(user.check_password('Password123*'))
+
+    def test_confirm_token_is_single_use(self):
+        user = self.make_user()
+        uidb64, token = self.build_link(user)
+        payload = {
+            'uidb64': uidb64,
+            'token': token,
+            'new_password': 'NewPassword123*',
+            'confirm_password': 'NewPassword123*',
+        }
+
+        first = self.client.post(self.confirm_url, payload)
+        second = self.client.post(self.confirm_url, payload)
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)

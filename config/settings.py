@@ -148,6 +148,7 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_THROTTLE_RATES': {
         'login': env('LOGIN_THROTTLE_RATE', default='10/min'),
+        'password_reset': env('PASSWORD_RESET_THROTTLE_RATE', default='5/min'),
     },
     # Cuerpo de error único: {"message": ..., "errors": {...}, "code": ...}
     'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',
@@ -193,8 +194,41 @@ STATIC_URL = 'static/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+# En desarrollo, si no se configuran MAIL_HOST y MAIL_USERNAME, los correos se
+# imprimen en la consola del backend (enlace de recuperación visible ahí).
+MAIL_HOST = env('MAIL_HOST', default='')
+MAIL_PORT = env.int('MAIL_PORT', default=587)
+MAIL_USERNAME = env('MAIL_USERNAME', default='')
+MAIL_PASSWORD = env('MAIL_PASSWORD', default='')
+MAIL_USE_TLS = env.bool('MAIL_USE_TLS', default=True)
+MAIL_TIMEOUT = env.int('MAIL_TIMEOUT', default=10)
+
+# Remitente de los correos que envía la API.
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='TaskFlow <no-reply@taskflow.local>')
+
+if MAIL_HOST and MAIL_USERNAME:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
+            'OPTIONS': {
+                'host': MAIL_HOST,
+                'port': MAIL_PORT,
+                'username': MAIL_USERNAME,
+                'password': MAIL_PASSWORD,
+                'use_tls': MAIL_USE_TLS,
+                'timeout': MAIL_TIMEOUT,
+            },
+        },
+    }
+else:
+    MAILERS = {
+        'default': {
+            'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        },
+    }
+
+# Recuperación de contraseña
+# URL base del frontend para construir el enlace del correo.
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:5173').rstrip('/')
+# Vida útil del token de restablecimiento (segundos).
+PASSWORD_RESET_TIMEOUT = env.int('PASSWORD_RESET_TIMEOUT', default=3600)
