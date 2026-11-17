@@ -165,6 +165,64 @@ class TaskDetailTests(TaskEndpointsTestBase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['data']['assignee_id'], self.member.id)
 
+    def test_member_can_take_unassigned_task_and_start_it(self):
+        task = Tasks.objects.create(module=self.module, title='Sin asignar')
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.patch(
+            self.detail_url(task),
+            {'assignee_id': self.member.id, 'state': 'EN_CURSO'},
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['data']['assignee_id'], self.member.id)
+        self.assertEqual(response.data['data']['state'], 'EN_CURSO')
+
+    def test_member_cannot_edit_fields_of_unassigned_task(self):
+        task = Tasks.objects.create(module=self.module, title='Sin asignar')
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.patch(
+            self.detail_url(task), {'title': 'Cambiado'}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        task.refresh_from_db()
+        self.assertEqual(task.title, 'Sin asignar')
+        self.assertIsNone(task.assignee_id)
+
+    def test_member_taking_unassigned_task_cannot_change_other_fields(self):
+        task = Tasks.objects.create(module=self.module, title='Sin asignar')
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.patch(
+            self.detail_url(task),
+            {
+                'assignee_id': self.member.id,
+                'title': 'Cambiado',
+                'priority': 'ALTA',
+            },
+            format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        task.refresh_from_db()
+        self.assertEqual(task.title, 'Sin asignar')
+        self.assertIsNone(task.assignee_id)
+
+    def test_member_cannot_change_state_of_unassigned_task(self):
+        task = Tasks.objects.create(module=self.module, title='Sin asignar')
+
+        self.client.force_authenticate(user=self.member)
+        response = self.client.patch(
+            self.detail_url(task), {'state': 'COMPLETADA'}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        task.refresh_from_db()
+        self.assertEqual(task.state, Tasks.TaskState.PENDIENTE)
+
     def test_member_cannot_assign_unassigned_task_to_another(self):
         task = Tasks.objects.create(module=self.module, title='Sin asignar')
 
@@ -202,6 +260,17 @@ class TaskDetailTests(TaskEndpointsTestBase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data['data']['assignee_id'], self.member.id)
+
+    def test_owner_can_edit_fields_of_unassigned_task(self):
+        task = Tasks.objects.create(module=self.module, title='Libre')
+
+        self.client.force_authenticate(user=self.owner)
+        response = self.client.patch(
+            self.detail_url(task), {'title': 'Reasignada por OWNER'}, format='json'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['data']['title'], 'Reasignada por OWNER')
 
     def test_task_from_other_module_returns_404(self):
         other_module = Module.objects.create(name='Otro', creator=self.owner)

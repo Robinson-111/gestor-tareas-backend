@@ -108,23 +108,38 @@ def update_task(
     Actualiza una tarea respetando las reglas de permisos:
 
     - OWNER: puede modificar cualquier tarea.
-    - MEMBER: solo puede modificar tareas que tenga asignadas.
-      También puede "tomar" una tarea sin asignar asignándosela a sí mismo (RF-19).
+    - MEMBER responsable: puede modificar la tarea que tiene asignada.
+    - MEMBER sin tarea asignada: solo puede "tomar" una tarea sin
+      responsable asignándosela a sí mismo (RF-19). En esa toma no puede
+      cambiar ningún otro campo (solo se acompaña de `state=EN_CURSO`,
+      que forma parte de la toma). El resto de campos queda bloqueado
+      hasta ser el responsable.
     """
     membership = get_membership(module_id, user)
 
     task = get_object_or_404(Tasks, id=task_id, module_id=module_id)
 
     if not membership.is_owner:
-        is_assigned_to_user = task.assignee_id == user.id
-        is_taking_unassigned = (
+        is_responsible = task.assignee_id == user.id
+        is_claiming_unassigned = (
             task.assignee_id is None
             and validated_data.get('assignee') == user
         )
 
-        if not is_assigned_to_user and not is_taking_unassigned:
+        if is_claiming_unassigned:
+            forbidden_fields = [
+                field
+                for field, value in validated_data.items()
+                if field != 'assignee'
+                and not (field == 'state' and value == 'EN_CURSO')
+            ]
+            if forbidden_fields:
+                raise PermissionError(
+                    "Solo el responsable puede editar los campos de una tarea."
+                )
+        elif not is_responsible:
             raise PermissionError(
-                "Solo puedes modificar las tareas que tienes asignadas."
+                "Solo el responsable puede editar los campos de una tarea."
             )
 
     if 'assignee' in validated_data:
