@@ -166,6 +166,11 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'login': env('LOGIN_THROTTLE_RATE', default='10/min'),
         'password_reset': env('PASSWORD_RESET_THROTTLE_RATE', default='5/min'),
+        'token_refresh': env('TOKEN_REFRESH_THROTTLE_RATE', default='30/min'),
+        'logout': env('LOGOUT_THROTTLE_RATE', default='20/min'),
+        'notifications': env('NOTIFICATIONS_THROTTLE_RATE', default='60/min'),
+        'tasks': env('TASKS_THROTTLE_RATE', default='40/min'),
+        'modules': env('MODULES_THROTTLE_RATE', default='30/min'),
     },
     # Cuerpo de error único: {"message": ..., "errors": {...}, "code": ...}
     'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',

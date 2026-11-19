@@ -23,6 +23,7 @@ from .services import (
     leave_module
 )
 from core.pagination import CustomPagination
+from core.throttling import TokenBucketRateThrottle
 from .serializers.modules import ModuleSerializer
 from .serializers.explore_module import ExploreModuleSerializer
 from .serializers.module_create import ModuleCreateSerializer
@@ -33,6 +34,8 @@ from .serializers.add_member import AddMemberModuleSerializer
 
 class ModuleListView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'modules'
 
     def get(self, request):
         search = request.query_params.get('search')
@@ -85,6 +88,9 @@ class ModuleJoinView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'modules'
+
     def post(self, request, id):
         try:
             member = join_module(module_id=id, user=request.user)
@@ -120,6 +126,9 @@ class ModuleDetailView(APIView):
         if self.request.method in ('PATCH', 'DELETE'):
             return [IsAuthenticated(), IsModuleOwner()]
         return [IsAuthenticated(), IsModuleMember()]
+
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'modules'
 
     def get(self, request, id):
         module = get_module(id)
@@ -158,6 +167,9 @@ class MembersModuleView(APIView):
         if self.request.method == 'GET':
             return [IsAuthenticated(), IsModuleMember()]
         return [IsAuthenticated(), IsModuleOwner()]
+
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'modules'
 
     def get(self, request, id):
         try:
@@ -228,6 +240,8 @@ class MembersModuleView(APIView):
 
 class ClaimModuleOwnershipView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'modules'
 
     def patch(self, request, id):
         try:
@@ -255,6 +269,8 @@ class LeaveModuleView(APIView):
     """
 
     permission_classes = [IsAuthenticated, IsModuleMember]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'modules'
 
     def post(self, request, id):
         try:

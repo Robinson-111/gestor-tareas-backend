@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.pagination import CustomPagination
+from core.throttling import TokenBucketRateThrottle
 from notifications.serializers import NotificationSerializer
 from notifications.services import (
     delete_all_notifications,
@@ -16,6 +17,8 @@ from notifications.services import (
 
 class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'notifications'
 
     def get(self, request):
         unread_param = request.query_params.get('unread')
@@ -37,6 +40,8 @@ class NotificationListView(APIView):
 
 class NotificationUnreadCountView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'notifications'
 
     def get(self, request):
         return Response({'unread_count': unread_count(request.user)})
@@ -44,6 +49,8 @@ class NotificationUnreadCountView(APIView):
 
 class NotificationReadView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'notifications'
 
     def post(self, request, id):
         notification = mark_read(request.user, id)
@@ -56,6 +63,8 @@ class NotificationReadView(APIView):
 
 class NotificationReadAllView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'notifications'
 
     def post(self, request):
         updated = mark_all_read(request.user)
@@ -68,6 +77,8 @@ class NotificationReadAllView(APIView):
 
 class NotificationDeleteView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'notifications'
 
     def delete(self, request, id):
         notification = delete_notification(request.user, id)
@@ -80,6 +91,8 @@ class NotificationDeleteView(APIView):
 
 class NotificationDeleteAllView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'notifications'
 
     def delete(self, request):
         deleted = delete_all_notifications(request.user)

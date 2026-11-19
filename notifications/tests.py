@@ -2,6 +2,7 @@ from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
 from datetime import timedelta
+from django.core.cache import cache
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
@@ -213,6 +214,25 @@ class NotificationCleanupTests(TestCase):
         call_command('cleanup_notifications', days=3)
 
         self.assertFalse(Notification.objects.filter(id=old_read.id).exists())
+
+
+class NotificationThrottleTests(APITestCase):
+    """Rate limit con token bucket sobre las notificaciones."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='throttle@example.com', name='Throttle', password='Password123'
+        )
+        self.client.force_authenticate(user=self.user)
+        cache.clear()
+
+    def test_delete_all_is_throttled_after_the_token_bucket_limit(self):
+        for _ in range(60):
+            response = self.client.delete('/api/v1/notifications/delete-all/')
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.client.delete('/api/v1/notifications/delete-all/')
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
 
 
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_LAYER)

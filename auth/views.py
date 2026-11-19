@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import ScopedRateThrottle
+from core.throttling import TokenBucketRateThrottle
 from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers.register import RegisterSerializer
 from .serializers.login import LoginSerializer
@@ -94,6 +95,8 @@ class PasswordResetConfirmView(APIView):
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'logout'
 
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
@@ -110,3 +113,5 @@ class RefreshTokenView(TokenRefreshView):
     Endpoint para renovar el access token (y rotar refresh token si está configurado).
     """
     permission_classes = [AllowAny]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'token_refresh'

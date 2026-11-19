@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.pagination import CustomPagination
+from core.throttling import TokenBucketRateThrottle
 from modules.permissions import IsModuleMember
 from tasks.serializers.task import (
     TaskCreateSerializer,
@@ -23,6 +24,8 @@ from tasks.services import (
 
 class TaskListCreateView(APIView):
     permission_classes = [IsAuthenticated, IsModuleMember]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'tasks'
 
     def get(self, request, id):
         try:
@@ -62,6 +65,8 @@ class TaskListCreateView(APIView):
 
 class TaskDetailView(APIView):
     permission_classes = [IsAuthenticated, IsModuleMember]
+    throttle_classes = [TokenBucketRateThrottle]
+    throttle_scope = 'tasks'
 
     def get(self, request, id, task_id):
         try:
