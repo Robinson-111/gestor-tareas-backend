@@ -11,6 +11,7 @@ from django.urls import include, path
 urlpatterns = [
     path('auth/', include('auth.urls')),
     path('users/', include('account.urls')),
+    path('notifications/', include('notifications.urls')),
     path('modules/<int:id>/tasks/', include('tasks.urls')),
     path('modules/', include('modules.urls')),
 ]

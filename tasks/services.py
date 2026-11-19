@@ -4,6 +4,8 @@ from rest_framework.exceptions import ValidationError
 
 from account.models import User
 from modules.models import Module, UserModule
+from notifications.models import Notification
+from notifications.services import notify, notify_many
 from tasks.models import Tasks
 
 
@@ -82,10 +84,13 @@ def create_task(module_id: int, user: User, validated_data: dict) -> Tasks:
     assignee = validated_data.get('assignee')
     validate_assignee(module_id, assignee)
 
-    return Tasks.objects.create(
+    task = Tasks.objects.create(
         module=module,
         **validated_data
     )
+    _notify_task_created(task, module, user)
+
+    return task
 
 
 def get_task(module_id: int, task_id: int, user: User) -> Tasks:
@@ -118,6 +123,8 @@ def update_task(
     membership = get_membership(module_id, user)
 
     task = get_object_or_404(Tasks, id=task_id, module_id=module_id)
+    old_assignee_id = task.assignee_id
+    old_state = task.state
 
     if not membership.is_owner:
         is_responsible = task.assignee_id == user.id
@@ -149,6 +156,7 @@ def update_task(
         setattr(task, field, value)
 
     task.save()
+    _notify_task_updated(task, user, old_assignee_id, old_state)
     return task
 
 
@@ -168,4 +176,109 @@ def delete_task(module_id: int, task_id: int, user: User) -> None:
             "No puedes eliminar una tarea asignada a otro integrante."
         )
 
+    module = task.module
+    title = task.title
     task.delete()
+    _notify_task_deleted(module, title, user)
+
+
+def _task_payload(task: Tasks) -> dict:
+    return {'task_id': task.id, 'module_id': task.module_id}
+
+
+def _notify_task_created(task: Tasks, module: Module, actor: User) -> None:
+    assignee_id = task.assignee_id
+
+    if assignee_id and assignee_id != actor.id:
+        notify(
+            task.assignee,
+            Notification.Type.TASK_ASSIGNED,
+            f'Te asignaron «{task.title}»',
+            f'{actor.name} te asignó una tarea en {module.name}.',
+            _task_payload(task),
+        )
+
+    recipients = [
+        membership.user
+        for membership in UserModule.objects
+        .filter(module=module)
+        .select_related('user')
+        if membership.user_id not in (actor.id, assignee_id)
+    ]
+    notify_many(
+        recipients,
+        Notification.Type.TASK_CREATED,
+        f'Nueva tarea en {module.name}',
+        f'{actor.name} creó «{task.title}».',
+        _task_payload(task),
+        exclude_user_ids=(actor.id, assignee_id),
+    )
+
+
+def _notify_task_updated(
+    task: Tasks,
+    actor: User,
+    old_assignee_id: int | None,
+    old_state: str
+) -> None:
+    module = task.module
+    new_assignee_id = task.assignee_id
+
+    if new_assignee_id != old_assignee_id:
+        if new_assignee_id and new_assignee_id != actor.id:
+            notify(
+                task.assignee,
+                Notification.Type.TASK_ASSIGNED,
+                f'Te asignaron «{task.title}»',
+                f'{actor.name} te asignó una tarea en {module.name}.',
+                _task_payload(task),
+            )
+
+        if old_assignee_id and old_assignee_id != actor.id:
+            previous = User.objects.filter(id=old_assignee_id).first()
+            if previous:
+                notify(
+                    previous,
+                    Notification.Type.TASK_UNASSIGNED,
+                    f'Te quitaron «{task.title}»',
+                    f'{actor.name} te desasignó una tarea en {module.name}.',
+                    _task_payload(task),
+                )
+
+    if (
+        old_state != Tasks.TaskState.COMPLETADA
+        and task.state == Tasks.TaskState.COMPLETADA
+    ):
+        owners = [
+            membership.user
+            for membership in UserModule.objects
+            .filter(module=module, rol=UserModule.Roles.OWNER)
+            .select_related('user')
+            if membership.user_id != actor.id
+        ]
+        notify_many(
+            owners,
+            Notification.Type.TASK_COMPLETED,
+            f'Tarea completada en {module.name}',
+            f'{actor.name} completó «{task.title}».',
+            _task_payload(task),
+            exclude_user_ids=(actor.id,),
+        )
+
+
+def _notify_task_deleted(module: Module, title: str, actor: User) -> None:
+    recipients = [
+        membership.user
+        for membership in UserModule.objects
+        .filter(module=module)
+        .select_related('user')
+        if membership.user_id != actor.id
+    ]
+    notify_many(
+        recipients,
+        Notification.Type.TASK_DELETED,
+        f'Tarea eliminada en {module.name}',
+        f'{actor.name} eliminó «{title}».',
+        {'module_id': module.id},
+        exclude_user_ids=(actor.id,),
+    )

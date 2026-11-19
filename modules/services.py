@@ -5,6 +5,8 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from modules.models import Module, UserModule
+from notifications.models import Notification
+from notifications.services import notify
 from account.models import User
 from tasks.models import Tasks
 
@@ -125,6 +127,13 @@ def create_module(creator: User, validated_data: dict) -> Module:
                 module=module,
                 rol=UserModule.Roles.MEMBER
             )
+            notify(
+                user,
+                Notification.Type.MEMBER_ADDED,
+                f'Te agregaron a {module.name}',
+                f'Ahora eres integrante del módulo {module.name}.',
+                {'module_id': module.id},
+            )
 
         return module
 
@@ -195,11 +204,20 @@ def add_member_to_module(module_id: int, user: User) -> UserModule:
     if UserModule.objects.filter(module=module, user=user).exists():
         raise ValidationError({"user_id": ["El usuario ya es integrante de este módulo."]})
 
-    return UserModule.objects.create(
+    membership = UserModule.objects.create(
         module=module,
         user=user,
         rol=UserModule.Roles.MEMBER
     )
+    notify(
+        user,
+        Notification.Type.MEMBER_ADDED,
+        f'Te agregaron a {module.name}',
+        f'Ahora eres integrante del módulo {module.name}.',
+        {'module_id': module.id},
+    )
+
+    return membership
 
 
 def _unassign_tasks(module_id: int, user_id: int) -> None:
@@ -226,9 +244,20 @@ def delete_member_from_module(module_id: int, user_id: int):
     if user_module.rol == UserModule.Roles.OWNER:
         raise ValidationError("No es posible eliminar al propietario del módulo.")
 
+    module = user_module.module
+    member_user = user_module.user
+
     with transaction.atomic():
         _unassign_tasks(module_id, user_id)
         user_module.delete()
+
+    notify(
+        member_user,
+        Notification.Type.MEMBER_REMOVED,
+        f'Te eliminaron de {module.name}',
+        f'Ya no eres integrante del módulo {module.name}.',
+        {'module_id': module.id},
+    )
 
     return user_module
 
@@ -296,6 +325,14 @@ def edit_rol_member_from_module(
 
         member.rol = UserModule.Roles.OWNER
         member.save(update_fields=['rol'])
+
+    notify(
+        member.user,
+        Notification.Type.OWNER_TRANSFERRED,
+        f'Ahora eres OWNER de {member.module.name}',
+        'La propiedad del módulo se transfirió a tu cuenta.',
+        {'module_id': member.module_id},
+    )
 
     return member
 
